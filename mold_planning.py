@@ -1,5 +1,5 @@
 from tkinter import *
-from methods import get_new_entry, get_short_plan, get_complete_plan, get_mold_info, get_mold_info, plan_by_mold
+from methods import get_new_entry, get_short_plan, get_complete_plan, get_mold_info, get_mold_info, plan_by_mold, submit_entry
 from tkinter import ttk
 from tkinter import messagebox
 import sqlite3
@@ -21,16 +21,6 @@ class Planning(Toplevel):
         self.title("Mold Planning")
         self.focus_force()
         self.grab_set()
-        # self.resizable(FALSE, FALSE)
-        self.P_start_date = None
-        self.A_start_date = None
-        self.AC_start_date = None
-        self.D_start_date = None
-        self.C_start_date = None
-        self.CR_start_date = None
-        self.SC_start_date = None
-        self.I_start_date = None
-
 # Set Window size and Ser at center
         window_height = 780
         window_width = 1280
@@ -93,40 +83,54 @@ class Planning(Toplevel):
 
         uname = shared_variable.user_name
 
-        queries = []
-
         # Fill no of days as per difficulty
-        def fill_days():
+        def fill_days(event):
             # create a dictionary of tuples with no of days as per difficulty
-            mc_model_values2 = ('ASB-70DPH', 'ASB-70DPW', 'ASB-50MB', 'ASB-12M', 'PF', 'Preform', 'Modification', 'Parts Order', 'ECM')
+            mc_model_values = ('70DPH', '70DPW', '50MB', '12M', 'PF')
 
             with open('O:/Scheduling/Mold Design Application/Final software/database/planning_days.json', 'r') as f:
                 # Load the contents of the file as a dictionary
                 days_data = json.load(f)
 
-            r_dict = days_data[self.DegnModel.get()]
+            mc_model = "70DPH"
 
-            # get the data corresponding to the selected value from the dictionary
-            p, a, ac, d, c, sc, i = r_dict[self.difficulty.get()]
+            for mc in mc_model_values:
+                if mc in self.machine_type.get():
+                    mc_model = mc
+                    if self.Activity_var.get() == 'Preform':
+                        self.DegnModel.set('Preform')
+                    else:
+                        for mcs in mc_model_values2:
+                            if mc in mcs:
+                                try:
+                                    self.DegnModel.set(mcs)
+                                except KeyError:
+                                    pass
 
-            # display the data in the entry widgets
-            set_difficulty = {
-                "Preform": p,
-                "Assembly": a,
-                "Assembly Check": ac,
-                "Detailing": d,
-                "Checking": c,
-                "Second Check": sc,
-                "Issue": i
-            }
+            try:
+                r_dict = days_data[mc_model]
 
-            self.Designer_label = ttk.Label(self, text='Designers Group:').place(x=250, y=735)
-            self.Designer_Comb = ttk.Combobox(self, textvariable=self.DegnModel, width=15, values=mc_model_values2).place(x=360, y=730)
-            # Create a button with the refresh symbol as text
-            self.refresh_btn = ttk.Button(self, text="\u27F3", command=get_designers)
-            self.refresh_btn.place(x=485, y=730, width=40)
+                # get the data corresponding to the selected value from the dictionary
+                p, a, ac, d, c, sc, i = r_dict[self.difficulty.get()]
 
+                # display the data in the entry widgets
+                set_difficulty = {
+                    "Preform": p,
+                    "Assembly": a,
+                    "Assembly Check": ac,
+                    "Detailing": d,
+                    "Checking": c,
+                    "Second Check": sc,
+                    "Mold Issue": i
+                }
+                try:
+                    activity_day = set_difficulty[self.Activity_var.get()]
+                    self.Activity_day.set(activity_day)
+                except KeyError:
+                    self.Activity_day.set('')
 
+            except KeyError:
+                self.Activity_day.set('')
 
         # Select designer
         def sel_dsgn(event, arg):
@@ -140,155 +144,41 @@ class Planning(Toplevel):
         # Date Entry widget function
         def open_cal(event, arg):
             self.cal_date.set(arg.entry.get())
+            get_designers()
 
-        def query_n_cmd(arg1, arg2, arg3):
-            arg2.set(2)
+        def submit_one():
+            print(self.Y_var.get(), self.N_var.get())
+            blank_check = (self.Activity_var, self.Activity_day, self.Activity_start_date.entry, self.Activity_designer)
 
-            try:
-                queries.remove(arg3)
-            except ValueError:
-                pass
+            if self.Y_var.get() == 1 and self.N_var.get() == 1:
+                messagebox.showerror("Scheduler", "Please select Yes or No")
+                return
 
-        def query_y_cmd(arg1, arg2, arg3):
-            arg1.set(0)
-
-            if arg2.get() == 1:
-                queries.append(arg3)
-            elif arg2.get() == 0:
-                queries.remove(arg3)
-            else:
-                pass
-
-        def submit_one(arg1, arg2, arg3):
-            # arg1=checkbox var, arg2="query', arg3="D_PLAN_STATUS"
-
-            if arg1.get() != 1:
+            if self.Y_var.get() == 0 and self.N_var.get() == 0:
                 messagebox.showerror("Scheduler", "Please plan first")
                 return
 
-            blank_check = (self.Activity_var, self.Activity_day, self.Activity_start_date.entry, self.Activity_end, self.Activity_designer)
+            if self.Y_var.get() == 1 and self.N_var.get() == 0:
 
-            blank_item = []
-            for v in blank_check:
-                if v.get() == "" or v.get() == "***":
-                    v.set("***")
-                    blank_item.append(v.get())
+                blank_item = []
+                for v in blank_check:
+                    if v.get() == "" or v.get() == "***":
+                        v.set("***")
+                        blank_item.append(v.get())
 
-            if blank_item:
-                return
+                if blank_item:
+                    return
 
-            # Connect to the SQLite3 database
-            conn = sqlite3.connect(f"{self.path}database/MDShdb.db")
-            c = conn.cursor()
-
-            c.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{blank_check[arg2][2].get()}'")
-            designer_tbl = c.fetchone()
-
-            if not designer_tbl:
-                messagebox.showinfo("Scheduler", "Please select the proper designer")
-                return
-
-            result = c.execute("SELECT YEAR2023 FROM holidaylist")
-            holiday_list = tuple(date[0] for date in result.fetchall())
-
-            days_insert = {
-                "p_query": (self.P_start_date.entry.get(), self.p_day.get(), self.p_designer.get(), "Preform"),
-                "a_query": (self.A_start_date.entry.get(), self.a_day.get(), self.a_designer.get(), "Assembly"),
-                "ac_query": (self.AC_start_date.entry.get(), self.ac_day.get(), self.ac_designer.get(), "Assembly Check"),
-                "d_query": (self.D_start_date.entry.get(), self.d_day.get(), self.d_designer.get(), "Detailing"),
-                "c_query": (self.C_start_date.entry.get(), self.c_day.get(), self.c_designer.get(), "Checking"),
-                "cr_query": (self.CR_start_date.entry.get(), self.cr_day.get(), self.cr_designer.get(), "Correction"),
-                "sc_query": (self.SC_start_date.entry.get(), self.sc_day.get(), self.sc_designer.get(), "Second Check"),
-                "i_query": (self.I_start_date.entry.get(), self.i_day.get(), self.i_designer.get(), "Issue"),
-            }
-
-            # Define the input values
-            if '.' in days_insert[arg2][1]:
-                no_of_days = float(days_insert[arg2][1])
-            else:
-                no_of_days = int(days_insert[arg2][1])
-
-            # user log date
-            user_log = uname + " " + datetime.now().strftime('%d/%m/%Y')
-
-            # Convert string to datetime object
-            start_date = datetime.strptime(days_insert[arg2][0], "%d-%m-%Y")
-
-            # Loop through the number of days and insert records into the database
-            for i in range(int(no_of_days)):
-                if start_date.weekday() == 6:
-                    start_date = start_date + timedelta(days=1)
-                    if start_date.strftime("%Y-%m-%d") in holiday_list:
-                        start_date = start_date + timedelta(days=1)
-                # Create a date string in the format 'dd-mm-yyyy'
-                date_str = start_date.strftime("%Y-%m-%d")
-                self.end_day.set(date_str)
-                # Insert the record into the database
-                c.execute("INSERT INTO HEATMAP (REQ_ID,MOLD_NO,DATE,DESIGNER,ACTIVITY,DAYS,STATUS,STATUS_REMARK,USER) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                          (self.req_id.get(), self.mold_no.get(), date_str, days_insert[arg2][2], days_insert[arg2][3], 1, 0, 'Planned', user_log))
-                # Increment the day by 1
-                start_date = start_date + timedelta(days=1)
-
-            # If there are remaining days (e.g. 0.5 in this case), insert a record with the remaining days
-            if no_of_days % 1 != 0:
-                if start_date.weekday() == 6:
-                    start_date = start_date + timedelta(days=1)
-                    if start_date.strftime("%Y-%m-%d") in holiday_list:
-                        start_date = start_date + timedelta(days=1)
-                date_str = start_date.strftime("%Y-%m-%d")
-                self.end_day.set(date_str)
-                c.execute("INSERT INTO HEATMAP (REQ_ID,MOLD_NO,DATE,DESIGNER,ACTIVITY,DAYS,STATUS,STATUS_REMARK,USER) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                          (self.req_id.get(), self.mold_no.get(), date_str, days_insert[arg2][2], days_insert[arg2][3], no_of_days % 1, 0, 'Planned', user_log))
-
-            # Execute the update query
-            c.execute(f"UPDATE MOLD_TABLE SET {arg3}={arg3}+?,PRE_PLAN_STATUS=? WHERE REQ_ID=?", (1, 1, self.req_id.get()))
-
-            # reset the start date
-            ob_date = datetime.strptime(days_insert[arg2][0], "%d-%m-%Y")
-            start_date = datetime.strftime(ob_date, "%Y-%m-%d")
-
-            p_query = f"INSERT INTO {self.p_designer.get()} (REQ_ID,MOLD_NO,ACTIVITY,START_DATE,END_DATE,DAYS_COUNT,STATUS,STATUS_REMARK) VALUES (?,?,?,?,?,?,?,?)", \
-                      (self.req_id.get(), self.mold_no.get(), 'Preform', start_date, self.end_day.get(), self.p_day.get(), 0, 'Planned'),
-            a_query = f"INSERT INTO {self.a_designer.get()} (REQ_ID,MOLD_NO,ACTIVITY,START_DATE,END_DATE,DAYS_COUNT,STATUS,STATUS_REMARK) VALUES (?,?,?,?,?,?,?,?)", \
-                      (self.req_id.get(), self.mold_no.get(), "Assembly", start_date, self.end_day.get(), self.a_day.get(), 0, 'Planned'),
-            ac_query = f"INSERT INTO {self.ac_designer.get()} (REQ_ID,MOLD_NO,ACTIVITY,START_DATE,END_DATE,DAYS_COUNT,STATUS,STATUS_REMARK) VALUES (?,?,?,?,?,?,?,?)", \
-                       (self.req_id.get(), self.mold_no.get(), "Assembly Check", start_date, self.end_day.get(), self.ac_day.get(), 0, 'Planned'),
-            d_query = f"INSERT INTO {self.d_designer.get()} (REQ_ID,MOLD_NO,ACTIVITY,START_DATE,END_DATE,DAYS_COUNT,STATUS,STATUS_REMARK) VALUES (?,?,?,?,?,?,?,?)", \
-                      (self.req_id.get(), self.mold_no.get(), "Detailing", start_date, self.end_day.get(), self.d_day.get(), 0, 'Planned'),
-            c_query = f"INSERT INTO {self.c_designer.get()} (REQ_ID,MOLD_NO,ACTIVITY,START_DATE,END_DATE,DAYS_COUNT,STATUS,STATUS_REMARK) VALUES (?,?,?,?,?,?,?,?)", \
-                      (self.req_id.get(), self.mold_no.get(), "Checking", start_date, self.end_day.get(), self.c_day.get(), 0, 'Planned'),
-            cr_query = f"INSERT INTO {self.cr_designer.get()} (REQ_ID,MOLD_NO,ACTIVITY,START_DATE,END_DATE,DAYS_COUNT,STATUS,STATUS_REMARK) VALUES (?,?,?,?,?,?,?,?)", \
-                       (self.req_id.get(), self.mold_no.get(), "Checking", start_date, self.end_day.get(), self.cr_day.get(), 0, 'Planned'),
-            sc_query = f"INSERT INTO {self.sc_designer.get()} (REQ_ID,MOLD_NO,ACTIVITY,START_DATE,END_DATE,DAYS_COUNT,STATUS,STATUS_REMARK) VALUES (?,?,?,?,?,?,?,?)", \
-                       (self.req_id.get(), self.mold_no.get(), "Second Check", start_date, self.end_day.get(), self.sc_day.get(), 0, 'Planned'),
-            i_query = f"INSERT INTO {self.i_designer.get()} (REQ_ID,MOLD_NO,ACTIVITY,START_DATE,END_DATE,DAYS_COUNT,STATUS,STATUS_REMARK) VALUES (?,?,?,?,?,?,?,?)", \
-                      (self.req_id.get(), self.mold_no.get(), "Issue", start_date, self.end_day.get(), self.i_day.get(), 0, 'Planned')
-
-            dsgn_insert = {
-                "p_query": p_query,
-                "a_query": a_query,
-                "ac_query": ac_query,
-                "d_query": d_query,
-                "c_query": c_query,
-                "cr_query": cr_query,
-                "sc_query": sc_query,
-                "i_query": i_query,
-            }
-
-            c.execute(dsgn_insert[arg2][0], dsgn_insert[arg2][1])
-
-            # Commit the changes and close the connection
-            conn.commit()
-            conn.close()
-
-            blank_check[arg2][0].delete(0, END)
-            blank_check[arg2][2].set("")
-            arg1.set(0)
+                submit_entry(self.MDShdb, self.req_id.get(), self.mold_no.get(), self.Activity_var.get(), self.Activity_start_date.entry.get(), self.Activity_day.get(), self.Activity_designer.get())
 
             get_mold_plan(self.mold_no.get())
 
-            # Delete all data from the TreeView
-            self.tree.delete(*self.tree.get_children())
+            for v in blank_check:
+                if v != self.Activity_start_date.entry:
+                    v.set("")
+
+            # # Delete all data from the TreeView
+            # self.tree.delete(*self.tree.get_children())
 
         def get_first_day_of_month(month_name):
             current_year = datetime.today().year
@@ -366,35 +256,48 @@ class Planning(Toplevel):
             plt.show()
 
         def reset_var():
-
-
             self.difficulty.set('')
-
-
             self.DegnModel.set('')
 
-            queries.clear()
+        def refresh():
+            data_1 = get_new_entry(self.MDShdb)
 
-        # def get_new_entry():
-        #     # Connect to the SQLite database
-        #     conn = sqlite3.connect(f"{self.path}database/MDShdb.db")
-        #     cursor = conn.cursor()
-        #
-        #     # Execute a SELECT statement with a WHERE clause
-        #     cursor.execute('SELECT * FROM MOLD_TABLE WHERE PRE_PLAN_STATUS = ?', (0,))
-        #     data = cursor.fetchall()
-        #
-        #     # Close the connection
-        #     conn.close()
-        #
-        #     # Insert the data into the TreeView
-        #     for row in data:
-        #         self.dtree.insert('', END, values=row)
+            # Delete all data from the TreeView
+            self.new_entry_tree.delete(*self.new_entry_tree.get_children())
+
+            # Insert the data into the TreeView
+            for row_1 in data_1:
+                self.new_entry_tree.insert('', END, values=row_1)
+
+            data_2 = get_short_plan(self.MDShdb)
+
+            # Delete all data from the TreeView
+            self.short_plan_tree.delete(*self.short_plan_tree.get_children())
+
+            # Insert the data into the TreeView
+            for row_2 in data_2:
+                self.short_plan_tree.insert('', END, values=row_2)
+
+            data_3 = get_complete_plan(self.MDShdb)
+
+            # Delete all data from the TreeView
+            self.complete_plan_tree.delete(*self.complete_plan_tree.get_children())
+
+            # Insert the data into the TreeView
+            for row_3 in data_3:
+                self.complete_plan_tree.insert('', END, values=row_3)
 
         def update_info(event, arg):
 
             # Reset all variable
             reset_var()
+
+            trees = (self.new_entry_tree, self.short_plan_tree, self.complete_plan_tree)
+
+            for tree in trees:
+                if tree != arg:
+                    if len(tree.selection()) > 0:
+                        tree.selection_remove(tree.selection()[0])
 
             mold_no = arg.item(arg.selection()[0])['values'][1]
 
@@ -455,7 +358,6 @@ class Planning(Toplevel):
             #     m_date = datetime.strptime(cal_date, "%d-%m-%Y")
             # except ValueError:
             #     m_date = cal_date
-            print(type(self.cal_date.get()))
             m_date = datetime.strptime(self.cal_date.get(), "%d-%m-%Y")
 
             # get the selected value from the combobox
@@ -539,7 +441,7 @@ class Planning(Toplevel):
                 self.tree.insert("", "end", text=i, values=values)
 
         def mold_information():
-            activity = ('Preform', 'Assembly', 'Assembly Check', 'Detailing', 'Checking', 'Correction', '2nd Checking', 'Mold Issue')
+            activity = ('Preform', 'Assembly', 'Assembly Check', 'Detailing', 'Checking', 'Correction', 'Second Check', 'Mold Issue')
 
             # Labels Heading
             self.activity_label = ttk.Label(self.planning_details, text='Activity').grid(column=0, row=1)
@@ -551,84 +453,52 @@ class Planning(Toplevel):
             self.design_label = ttk.Label(self.planning_details, text='Designer').grid(column=6, row=1)
 
             # Labels row
-            self.Activity_combo = ttk.Combobox(self.planning_details, textvariable=self.Activity_var, values=activity, width=15).grid(column=0, row=2, sticky="W")
+            self.Activity_combo = ttk.Combobox(self.planning_details, textvariable=self.Activity_var, values=activity, width=15)
+            self.Activity_combo.grid(column=0, row=2, sticky="W")
+            self.Activity_combo.bind("<<ComboboxSelected>>", fill_days)
 
             # Activity check buttons
-            self.R1 = ttk.Checkbutton(self.planning_details, variable=self.Y_var, command=lambda arg1=self.N_var, arg2=self.Y_var, arg3=self.Activity_var: query_y_cmd(arg1, arg2, arg3))
+            self.R1 = ttk.Checkbutton(self.planning_details, variable=self.Y_var)
             self.R1.grid(column=1, row=2)
 
             # Activity check buttons
-            self.R11 = ttk.Checkbutton(self.planning_details, variable=self.N_var, command=lambda arg1=self.N_var, arg2=self.Y_var, arg3=self.Activity_var: query_n_cmd(arg1, arg2, arg3))
+            self.R11 = ttk.Checkbutton(self.planning_details, variable=self.N_var)
             self.R11.grid(column=2, row=2)
 
             # Start date
             self.Activity_start_date = DateEntry(self.planning_details, width=12)
             self.Activity_start_date.grid(column=3, row=2, padx=20, pady=4)
-            self.Activity_start_date.entry.bind('<FocusIn>', lambda event, arg=self.P_start_date: open_cal(event, arg))
+            self.Activity_start_date.entry.bind('<FocusIn>', lambda event, arg=self.Activity_start_date: open_cal(event, arg))
             self.Activity_start_date.entry.delete(first=0, last=END)
 
             # Days
-            self.Activity_day = ttk.Entry(self.planning_details, textvariable=self.Activity_day, width=5).grid(column=4, row=2, padx=20, pady=4)
+            self.Activity_day_entry = ttk.Entry(self.planning_details, textvariable=self.Activity_day, width=5).grid(column=4, row=2, padx=20, pady=4)
 
             # End date
-            self.Activity_end = ttk.Entry(self.planning_details, textvariable=self.Activity_end, width=10).grid(column=5, row=2)
+            self.Activity_end_entry = ttk.Entry(self.planning_details, textvariable=self.Activity_end, width=10).grid(column=5, row=2)
 
             # Designers data
-            self.Activity_designer = ttk.Entry(self.planning_details, textvariable=self.Activity_designer, width=10)
-            self.Activity_designer.grid(column=6, row=2)
-            self.Activity_designer.bind('<1>', lambda event, arg=self.Activity_designer: sel_dsgn(event, arg))
+            self.Activity_designer_entry = ttk.Entry(self.planning_details, textvariable=self.Activity_designer, width=10)
+            self.Activity_designer_entry.grid(column=6, row=2)
+            self.Activity_designer_entry.bind('<1>', lambda event, arg=self.Activity_designer: sel_dsgn(event, arg))
 
             # Add buttons
-            self.Activity_Button = ttk.Button(self.planning_details, text="Add", command=lambda arg1=self.Y_var, arg2=self.Activity_var: submit_one(arg1, arg2), width=4)
+            self.Activity_Button = ttk.Button(self.planning_details, text="Add", command=submit_one, width=4)
             self.Activity_Button.grid(column=7, row=2)
 
             for p_widgets in self.planning_details.winfo_children():
                 p_widgets.grid_configure(padx=5, pady=4)
 
         def get_mold_plan(mold_no):
-            try:
-                conn = sqlite3.connect(f"{self.path}database/MDShdb.db")
+            df_project_mold = plan_by_mold(self.MDShdb, mold_no)
 
-                # define query
-                query = 'SELECT * FROM HEATMAP WHERE MOLD_NO=? AND STATUS=?'
+            # Delete all data from the TreeView
+            self.data_tree.delete(*self.data_tree.get_children())
 
-                # Define the query parameters
-                params = (mold_no, '0')
-
-                # Execute a SELECT statement with a WHERE clause
-                df_project_mold = pd.read_sql(query, conn, params=params)
-                conn.close()
-
-                # group by and aggregate the 'DAYS' column
-                df_project_mold = df_project_mold.groupby(['REQ_ID', 'MOLD_NO', 'DESIGNER', 'ACTIVITY', 'STATUS'], as_index=False).agg({'DAYS': 'sum', 'DATE': 'first'})
-                df_project_mold = df_project_mold[['REQ_ID', 'MOLD_NO', 'DATE', 'DESIGNER', 'ACTIVITY', 'DAYS', 'STATUS']]
-
-                # convert 'DATE' column to datetime format
-                df_project_mold['DATE'] = pd.to_datetime(df_project_mold['DATE'], dayfirst=True)
-
-                # Convert date column to '%d-%m-%Y' format
-                df_project_mold['DATE'] = pd.to_datetime(df_project_mold['DATE']).dt.strftime('%d-%m-%Y')
-
-                # Delete all data from the TreeView
-                self.data_tree.delete(*self.data_tree.get_children())
-
-                # Insert the data into the TreeView
-                for i, row in df_project_mold.iterrows():
-                    values = tuple(row.values)
-                    self.data_tree.insert("", "end", text=i, values=values)
-            except ValueError:
-                pass
-            pass
-
-        def switch_func():
-            pass
-        #     # Check if the Label has been place
-        #     if self.mold_plan_details.winfo_manager() == "place":
-        #         self.mold_plan_details.place_forget()
-        #         self.mold_details.place(x=680, y=300, width=575, height=420)
-        #     else:
-        #         self.mold_details.place_forget()
-        #         self.mold_plan_details.place(x=680, y=300)
+            # Insert the data into the TreeView
+            for i, row_mold in df_project_mold.iterrows():
+                values = tuple(row_mold.values)
+                self.data_tree.insert("", "end", text=i, values=values)
 
         def change_plan(event):
             # Update variables from tree view
@@ -795,41 +665,8 @@ class Planning(Toplevel):
             self.ch_designer.set("")
 
         def submit():
-            selection = self.dtree.selection()
+            pass
 
-            if not selection:
-                messagebox.showerror("Error", 'Please plan first')
-                return
-
-            # try:
-            #     remark = self.remark_text.get("1.0", "end")
-            # except AttributeError:
-            #     pass
-            #
-            # # Connect to the SQLite3 database
-            # conn = sqlite3.connect(f"{self.path}database/MDShdb.db")
-            # c = conn.cursor()
-            #
-            # c.execute("UPDATE MOLD_TABLE SET REMARK=? WHERE REQ_ID=?", (remark, self.req_id.get()))
-            # conn.commit()
-            # conn.close()
-
-            # Reset all variable
-            reset_var()
-
-            # Clear all label in mold details
-            for child in self.mold_details.winfo_children():
-                child.destroy()
-
-            # Clear all label in mold details
-            for child in self.planning_details.winfo_children():
-                child.destroy()
-
-            # Delete all data from the TreeView
-            self.tree.delete(*self.tree.get_children())
-            self.dtree.delete(*self.dtree.get_children())
-            self.data_tree.delete(*self.data_tree.get_children())
-            get_new_entry()
 
 # Mold Info
 
@@ -881,17 +718,17 @@ class Planning(Toplevel):
         data = get_new_entry(self.MDShdb)
 
         self.new_entry_label = ttk.LabelFrame(self.mold_plan_details, text=f"New Mold : {len(data)}")
-        self.new_entry_label.place(x=0, y=0, width=190, height=395)
+        self.new_entry_label.place(x=0, y=0, width=185, height=395)
 
         columns = ('info', 'mold')
         self.new_entry_tree = ttk.Treeview(self.new_entry_label, columns=columns, show='headings')
-        self.new_entry_tree.place(x=0, y=5, width=175, height=370)
+        self.new_entry_tree.place(x=0, y=5, width=170, height=370)
 
         self.scrollbar_v = ttk.Scrollbar(self.new_entry_label, orient='vertical', command=self.new_entry_tree.yview)
-        self.scrollbar_v.place(x=175, y=5, width=10, height=370)
+        self.scrollbar_v.place(x=170, y=5, width=10, height=370)
 
         self.new_entry_tree.heading('info', text='Info Date')
-        self.new_entry_tree.column('info', anchor=CENTER, stretch=NO, minwidth=75, width=75)
+        self.new_entry_tree.column('info', anchor=CENTER, stretch=NO, minwidth=75, width=70)
         self.new_entry_tree.heading('mold', text='Mold No')
         self.new_entry_tree.column('mold', anchor=CENTER, stretch=NO, minwidth=100, width=95)
 
@@ -906,17 +743,17 @@ class Planning(Toplevel):
         short_plan_data = get_short_plan(self.MDShdb)
 
         self.short_plan_details = ttk.LabelFrame(self.mold_plan_details, text=f"Short Plan : {len(short_plan_data)}")
-        self.short_plan_details.place(x=195, y=0, width=190, height=395)
+        self.short_plan_details.place(x=193.5, y=0, width=185, height=395)
 
         columns = ('info', 'mold')
         self.short_plan_tree = ttk.Treeview(self.short_plan_details, columns=columns, show='headings')
-        self.short_plan_tree.place(x=0, y=5, width=175, height=370)
+        self.short_plan_tree.place(x=0, y=5, width=170, height=370)
 
         self.scrollbar_v = ttk.Scrollbar(self.short_plan_details, orient='vertical', command=self.short_plan_tree.yview)
-        self.scrollbar_v.place(x=175, y=5, width=10, height=370)
+        self.scrollbar_v.place(x=170, y=5, width=10, height=370)
 
         self.short_plan_tree.heading('info', text='Info Date')
-        self.short_plan_tree.column('info', anchor=CENTER, stretch=NO, minwidth=75, width=75)
+        self.short_plan_tree.column('info', anchor=CENTER, stretch=NO, minwidth=75, width=70)
         self.short_plan_tree.heading('mold', text='Mold No')
         self.short_plan_tree.column('mold', anchor=CENTER, stretch=NO, minwidth=100, width=95)
 
@@ -931,17 +768,17 @@ class Planning(Toplevel):
         complete_plan = get_complete_plan(self.MDShdb)
 
         self.complete_plan_details = ttk.LabelFrame(self.mold_plan_details, text=f"Complete Plan : {len(complete_plan)}")
-        self.complete_plan_details.place(x=390, y=0, width=180, height=395)
+        self.complete_plan_details.place(x=387.5, y=0, width=185, height=395)
 
         columns = ('info', 'mold')
         self.complete_plan_tree = ttk.Treeview(self.complete_plan_details, columns=columns, show='headings')
-        self.complete_plan_tree.place(x=0, y=5, width=175, height=370)
+        self.complete_plan_tree.place(x=0, y=5, width=170, height=370)
 
         self.scrollbar_v = ttk.Scrollbar(self.complete_plan_details, orient='vertical', command=self.complete_plan_tree.yview)
-        self.scrollbar_v.place(x=175, y=5, width=10, height=370)
+        self.scrollbar_v.place(x=170, y=5, width=10, height=370)
 
         self.complete_plan_tree.heading('info', text='Info Date')
-        self.complete_plan_tree.column('info', anchor=CENTER, stretch=NO, minwidth=75, width=75)
+        self.complete_plan_tree.column('info', anchor=CENTER, stretch=NO, minwidth=75, width=70)
         self.complete_plan_tree.heading('mold', text='Mold No')
         self.complete_plan_tree.column('mold', anchor=CENTER, stretch=NO, minwidth=100, width=95)
 
@@ -966,7 +803,7 @@ class Planning(Toplevel):
 
 # Switch Mold Information and Mold Info Button
 
-        self.switch_btn = ttk.Button(self, text=">", command=switch_func, width=1).place(x=1225, y=730)
+        self.switch_btn = ttk.Button(self, text=">", command=refresh, width=1).place(x=1225, y=730)
 
 # Mold Planning
 
@@ -992,7 +829,7 @@ class Planning(Toplevel):
         self.data_tree.heading('designer', text='Designer')
         self.data_tree.column('designer', anchor=CENTER, stretch=NO, minwidth=60, width=75)
         self.data_tree.heading('activity', text='Activity')
-        self.data_tree.column('activity', anchor=CENTER, stretch=NO, minwidth=60, width=80)
+        self.data_tree.column('activity', anchor=CENTER, stretch=NO, minwidth=60, width=150)
         self.data_tree.heading('days', text='Days')
         self.data_tree.column('days', anchor=CENTER, stretch=NO, minwidth=60, width=75)
         self.data_tree.heading('status', text='Status')
@@ -1001,6 +838,13 @@ class Planning(Toplevel):
         self.data_tree.bind('<<TreeviewSelect>>', change_plan)
 
         mold_information()
+
+        mc_model_values2 = ('ASB-70DPH', 'ASB-70DPW', 'ASB-50MB', 'ASB-12M', 'PF', 'Preform', 'Modification', 'Parts Order', 'ECM')
+        self.Designer_label = ttk.Label(self, text='Designers Group:').place(x=250, y=735)
+        self.Designer_Comb = ttk.Combobox(self, textvariable=self.DegnModel, width=15, values=mc_model_values2).place(x=360, y=730)
+        # Create a button with the refresh symbol as text
+        self.refresh_btn = ttk.Button(self, text="\u27F3", command=get_designers)
+        self.refresh_btn.place(x=485, y=730, width=40)
 
 
 class XYZ(object):
@@ -1016,7 +860,7 @@ from ttkbootstrap import Style
 # The main function
 if __name__ == "__main__":
     root = Tk()
-    style = Style(theme='flatly')
+    style = Style(theme='cyborg')
 
     obj = XYZ(root)
     root.mainloop()

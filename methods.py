@@ -117,6 +117,7 @@ def update_status(path, leave_path, initial, enp_id, status_remark, status, req_
     start_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     conn = sqlite3.connect(path)
     cursor = conn.cursor()
+    cursor.execute("PRAGMA JOURNAL_MODE='wal' ")
 
     # Execute a SELECT statement with a WHERE clause
     cursor.execute(f'SELECT START_DATE_ACT,PAUSE,ACT_HOURS FROM {initial} WHERE STATUS = ?', (1,))
@@ -269,10 +270,11 @@ def working_hour(leave_path, a_start, old_work_hours, user):
     return total_working_hours
 
 
-def submit_entry(path, req_id, mold_no, activity, req, start, days, end, designer):
+def submit_entry(path, req_id, mold_no, activity, start, days, designer):
     # Connect to the SQLite3 database
     conn = sqlite3.connect(path)
     c = conn.cursor()
+    c.execute("PRAGMA JOURNAL_MODE='wal' ")
 
     c.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{designer}'")
     designer_tbl = c.fetchone()
@@ -284,13 +286,13 @@ def submit_entry(path, req_id, mold_no, activity, req, start, days, end, designe
 
     status = {
         "Preform": "P_PLAN_STATUS",
-        "Assembly": "P_PLAN_STATUS",
-        "Assembly Check": "P_PLAN_STATUS",
-        "Detailing": "P_PLAN_STATUS",
-        "Checking": "P_PLAN_STATUS",
-        "Correction": "P_PLAN_STATUS",
-        "Second Check": "P_PLAN_STATUS",
-        "Issue": "P_PLAN_STATUS",
+        "Assembly": "A_PLAN_STATUS",
+        "Assembly Check": "AC_PLAN_STATUS",
+        "Detailing": "D_PLAN_STATUS",
+        "Checking": "C_PLAN_STATUS",
+        "Correction": "CR_PLAN_STATUS",
+        "Second Check": "SC_PLAN_STATUS",
+        "Mold Issue": "I_PLAN_STATUS",
     }
 
     # Define the input values
@@ -341,7 +343,7 @@ def submit_entry(path, req_id, mold_no, activity, req, start, days, end, designe
     start_date = datetime.strftime(ob_date, "%Y-%m-%d")
 
     c.execute(f"INSERT INTO {designer} (REQ_ID,MOLD_NO,ACTIVITY,START_DATE,END_DATE,DAYS_COUNT,STATUS,STATUS_REMARK) VALUES (?,?,?,?,?,?,?,?)",
-              (req_id, mold_no, activity, start_date, end, days, 0, 'Planned'))
+              (req_id, mold_no, activity, start_date, end_day, days, 0, 'Planned'))
 
     # Commit the changes and close the connection
     conn.commit()
@@ -407,6 +409,7 @@ def get_mold_info(path, mold_no):
     conn.close()
 
     return df_mold_info
+
 
 
 
